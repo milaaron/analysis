@@ -309,3 +309,99 @@ df_sprt_joined %>%
   geom_col(aes(fill = cond2))+
   geom_errorbar(aes(ymin=mean2-sd2, ymax=mean2+sd2), width = 0.05, position = position_dodge(.9))
 ```
+
+## Class Notes
+
+
+df_sprt <- read_rds(here("classes", "_data", "df_sprt.rds"))
+df_compq <- read_rds(here("classes", "_data", "df_compq.rds"))
+df_demo <- read_rds(here("classes", "_data", "df_demo.rds"))
+df_stims <- read_csv(here("classes", "_data", "stimuli-2023-eventive-repl-sprt.csv"))
+
+```{r}
+library(plotly)
+```
+
+```{r}
+df_sprtZ <- left_join(df_sprt, 
+                    select(stimuli, label, cond1, cond2), 
+                    join_by(label)) %>% 
+  rename(exp = cond1, 
+         condition = cond2, 
+         item = latinitem) %>% 
+  select(iphash, label, exp, condition, item, word_num, word, RT, sentence)
+```
+
+```{r}
+df_sprtZ <- df_sprtZ %>% 
+  left_join(select(df_compq, iphash, label, correct1), 
+            join_by(iphash, label)) 
+
+# save copy of df with incorrect trials
+df_sprt_witherrors <- df_sprtZ
+
+df_sprtZ <- filter(df_sprtZ, correct1 == 1)
+```
+```{r}
+df_gp_sprt <- filter(df_sprtZ, exp == "gp")
+
+
+df_gp_itemmeans <- df_gp_sprt %>% 
+  group_by(item, condition, word_num) %>% 
+  summarize(
+    RT = mean(RT, na.rm=TRUE)
+  )
+```
+```{r}
+df_gp_partmeans <- df_gp_sprt %>% 
+  group_by(iphash, condition, word_num) %>% 
+  summarize(
+    RT = mean(RT, na.rm=TRUE)
+  )
+```
+```{r}
+df_gp_partmeans %>% 
+  filter(word_num %in% c("3", "4", "5")) %>% 
+  group_by(condition, word_num) %>% 
+  summarize(
+    RT = mean(RT, na.rm=TRUE)
+  ) %>% 
+  ggplot(aes(x = condition, y = RT))+
+  geom_point()+
+  facet_wrap(vars(word_num))
+```
+
+```{r}
+p_strip <- df_gp_partmeans %>% 
+  filter(word_num %in% c("3", "4", "5")) %>% 
+  ggplot(aes(x = condition, y = RT)) +
+  geom_jitter(width = .2, alpha = .3) +
+  geom_point(stat = "summary", fun = mean, size = 4, shape = 4, color = "blue")+
+  facet_wrap(vars(word_num)) 
+ggplotly(p_strip)
+
+
+```
+
+```{r}
+p_parts <- df_gp_partmeans %>% 
+  filter(word_num %in% c("4")) %>% 
+  ggplot(aes(x = condition, y = RT, group = iphash, color = iphash)) +
+  geom_point(alpha = .3) +
+  geom_line()+
+  theme(legend.position = "none")
+ggplotly(p_parts)
+```
+
+#Inferential Statistics (example)
+```{r}
+library(lme4) # package for linear mixed effects
+library(lmerTest) # package for p-values from lme4 models
+```
+
+
+```{r}
+m1 <- lmer(RT ~ condition + (1 | iphash) + (1 + condition | item), 
+           data = filter(df_gp_sprt, word_num == 4))
+summary(m1)
+```
